@@ -1,0 +1,2129 @@
+<!doctype html>
+<html lang="id" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>ketik. — Tes Kecepatan Mengetik</title>
+    <meta
+      name="description"
+      content="Aplikasi tes kecepatan mengetik modern, minimalis, dan zero-friction berbahasa Indonesia dengan audio mekanikal dan leaderboard."
+    />
+    <meta property="og:title" content="ketik. — Tes Kecepatan Mengetik" />
+    <meta
+      property="og:description"
+      content="Uji kecepatan dan akurasi mengetik Bahasa Indonesia secara instan dengan desain minimalis."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              canvas: '#0B0F19',
+              surface: '#111827',
+              accent: '#F59E0B',
+              dim: '#64748B',
+              bright: '#F8FAFC',
+              err: '#F43F5E',
+            },
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        background-color: #0B0F19;
+        color: #F8FAFC;
+        font-family: 'Inter', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow-x: hidden;
+      }
+
+      /* Subtle floating atmospheric backdrop glow */
+      @keyframes ambientDrift {
+        0%, 100% {
+          transform: translateX(-50%) translateY(0px) scale(1);
+          opacity: 0.9;
+        }
+        50% {
+          transform: translateX(-46%) translateY(14px) scale(1.06);
+          opacity: 1;
+        }
+      }
+
+      .ambient-glow {
+        position: fixed;
+        top: -180px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(940px, 100vw);
+        height: 440px;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(245, 158, 11, 0.08) 0%,
+          rgba(245, 158, 11, 0.02) 45%,
+          transparent 72%
+        );
+        pointer-events: none;
+        z-index: 0;
+        animation: ambientDrift 12s ease-in-out infinite;
+      }
+
+      .ambient-glow-secondary {
+        position: fixed;
+        bottom: -220px;
+        right: -120px;
+        width: 560px;
+        height: 420px;
+        background: radial-gradient(
+          circle at center,
+          rgba(56, 189, 248, 0.04) 0%,
+          transparent 70%
+        );
+        pointer-events: none;
+        z-index: 0;
+        animation: ambientDrift 16s ease-in-out infinite reverse;
+      }
+
+      /* Typing stage geometry */
+      .words-viewport {
+        position: relative;
+        height: 132px; /* 3 lines * 44px */
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      @media (min-width: 768px) {
+        .words-viewport {
+          height: 144px; /* 3 lines * 48px */
+        }
+      }
+
+      #words-track {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 0 0.62em;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.4rem;
+        line-height: 44px;
+        letter-spacing: -0.01em;
+        transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: transform;
+      }
+
+      @media (min-width: 768px) {
+        #words-track {
+          font-size: 1.75rem;
+          line-height: 48px;
+        }
+      }
+
+      .word {
+        display: inline-flex;
+        position: relative;
+        height: 44px;
+        align-items: center;
+      }
+
+      @media (min-width: 768px) {
+        .word {
+          height: 48px;
+        }
+      }
+
+      .word.word-error {
+        text-decoration: underline;
+        text-decoration-color: rgba(244, 63, 94, 0.55);
+        text-underline-offset: 6px;
+        text-decoration-thickness: 2px;
+      }
+
+      @keyframes wordSuccessPop {
+        0% { transform: translateY(0); }
+        45% { transform: translateY(-2px); filter: brightness(1.15); }
+        100% { transform: translateY(0); }
+      }
+
+      .word.word-success-pop {
+        animation: wordSuccessPop 180ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .letter {
+        color: #64748B;
+        transition: color 60ms ease;
+        position: relative;
+        display: inline-block;
+      }
+
+      .letter.correct {
+        color: #F8FAFC;
+      }
+
+      .letter.incorrect {
+        color: #F43F5E;
+        box-shadow: inset 0 -2px 0 rgba(244, 63, 94, 0.75);
+      }
+
+      .letter.extra {
+        color: #FB7185;
+        opacity: 0.85;
+        box-shadow: inset 0 -2px 0 rgba(244, 63, 94, 0.65);
+      }
+
+      /* Keystroke micro-animations */
+      @keyframes keyPop {
+        0% { transform: scale(1); }
+        45% { transform: scale(1.18); }
+        100% { transform: scale(1); }
+      }
+
+      @keyframes keyShake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-2px); }
+        75% { transform: translateX(2px); }
+      }
+
+      .letter.pop-correct {
+        animation: keyPop 130ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .letter.pop-error {
+        animation: keyShake 160ms ease-in-out;
+      }
+
+      /* Smooth vertical caret */
+      #caret {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 2.5px;
+        height: 28px;
+        background-color: #F59E0B;
+        border-radius: 9999px;
+        pointer-events: none;
+        transition: transform 80ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease;
+        will-change: transform, opacity;
+        z-index: 5;
+        box-shadow: 0 0 12px rgba(245, 158, 11, 0.55);
+      }
+
+      @media (min-width: 768px) {
+        #caret {
+          height: 32px;
+        }
+      }
+
+      @keyframes caretBlink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.15; }
+      }
+
+      #caret.idle {
+        animation: caretBlink 1.05s ease-in-out infinite;
+      }
+
+      /* Active stage & urgent countdown feedback */
+      #typing-stage {
+        transition: border-color 200ms ease, box-shadow 250ms ease;
+      }
+
+      #typing-stage.stage-active {
+        border-color: rgba(245, 158, 11, 0.22);
+        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.08), 0 22px 48px -24px rgba(245, 158, 11, 0.18);
+      }
+
+      @keyframes timerPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.09); }
+      }
+
+      .timer-urgent {
+        color: #FB7185 !important;
+        display: inline-block;
+        animation: timerPulse 0.85s ease-in-out infinite;
+      }
+
+      /* Hidden input covering typing viewport so mobile taps summon keyboard immediately */
+      #typing-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        z-index: 15;
+        cursor: text;
+        font-size: 16px; /* Prevents iOS auto-zoom */
+        border: none;
+        outline: none;
+        background: transparent;
+        color: transparent;
+        caret-color: transparent;
+      }
+
+      /* Subtle edge fade at bottom of 3rd line */
+      .words-mask {
+        mask-image: linear-gradient(to bottom, #000 0%, #000 84%, rgba(0, 0, 0, 0.65) 100%);
+        -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 84%, rgba(0, 0, 0, 0.65) 100%);
+      }
+
+      .tabular-nums {
+        font-variant-numeric: tabular-nums;
+      }
+
+      @keyframes fadeSlideUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes wordsResetFade {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes modalSpring {
+        from {
+          opacity: 0;
+          transform: scale(0.96) translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
+      @keyframes rowStagger {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .animate-enter {
+        animation: fadeSlideUp 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      .animate-words-reset {
+        animation: wordsResetFade 200ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .animate-modal {
+        animation: modalSpring 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      .lb-row-enter {
+        opacity: 0;
+        animation: rowStagger 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #caret,
+        #words-track,
+        .animate-enter,
+        .animate-words-reset,
+        .animate-modal,
+        .lb-row-enter,
+        .ambient-glow,
+        .ambient-glow-secondary,
+        .letter.pop-correct,
+        .letter.pop-error,
+        .word.word-success-pop,
+        .timer-urgent {
+          transition: none !important;
+          animation: none !important;
+          opacity: 1 !important;
+        }
+      }
+
+      /* Custom scrollbar for leaderboard modal/list */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 9999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.22);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col selection:bg-amber-500/25 selection:text-amber-200">
+    <div class="ambient-glow" aria-hidden="true"></div>
+    <div class="ambient-glow-secondary" aria-hidden="true"></div>
+
+    <!-- Top Navigation Bar (Minimal 3-Zone Header) -->
+    <header class="relative z-20 w-full max-w-5xl mx-auto px-5 sm:px-8 pt-6 pb-4 flex items-center justify-between gap-4">
+      <!-- Zone 1: Brand Wordmark -->
+      <button
+        id="brand-home-btn"
+        type="button"
+        class="group flex items-center gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 rounded-md px-1 -ml-1 whitespace-nowrap shrink-0"
+        title="Mulai sesi ketik baru"
+      >
+        <svg
+          class="w-5 h-5 text-amber-500 transition-transform duration-150 group-hover:scale-105"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="2" y="6" width="20" height="12" rx="2.5"></rect>
+          <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"></path>
+        </svg>
+        <span class="font-mono text-lg sm:text-xl font-bold tracking-tight text-slate-50">
+          ketik<span class="text-amber-500">.</span>
+        </span>
+      </button>
+
+      <!-- Zone 2: Duration Selector (Compact Segmented Switch) -->
+      <nav
+        aria-label="Durasi tes"
+        class="flex items-center gap-1 p-1 rounded-lg bg-[#111827] border border-white/[0.08]"
+      >
+        <button
+          type="button"
+          data-duration="15"
+          class="duration-btn px-3 py-1.5 text-xs font-mono font-medium rounded-md transition-colors duration-150 text-slate-400 hover:text-slate-100 whitespace-nowrap shrink-0"
+        >
+          15s
+        </button>
+        <button
+          type="button"
+          data-duration="30"
+          class="duration-btn px-3 py-1.5 text-xs font-mono font-medium rounded-md transition-colors duration-150 bg-amber-500 text-[#0B0F19] font-semibold whitespace-nowrap shrink-0"
+        >
+          30s
+        </button>
+        <button
+          type="button"
+          data-duration="60"
+          class="duration-btn px-3 py-1.5 text-xs font-mono font-medium rounded-md transition-colors duration-150 text-slate-400 hover:text-slate-100 whitespace-nowrap shrink-0"
+        >
+          60s
+        </button>
+      </nav>
+
+      <!-- Zone 3: Leaderboard & Sound Mute/Unmute -->
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <button
+          id="open-leaderboard-btn"
+          type="button"
+          class="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-slate-300 hover:text-amber-400 rounded-lg hover:bg-white/[0.04] transition-colors duration-150 whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
+        >
+          <svg
+            class="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+            <path d="M4 22h16"></path>
+            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+          </svg>
+          <span class="hidden sm:inline">Lihat Leaderboard</span>
+          <span class="sm:hidden">Peringkat</span>
+        </button>
+
+        <button
+          id="sound-toggle-btn"
+          type="button"
+          aria-label="Matikan atau nyalakan suara ketikan"
+          title="Suara ketikan: Aktif"
+          class="inline-flex items-center justify-center w-9 h-9 rounded-lg text-slate-300 hover:text-amber-400 hover:bg-white/[0.04] border border-white/[0.08] transition-colors duration-150 shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
+        >
+          <svg
+            id="icon-sound-on"
+            class="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          </svg>
+          <svg
+            id="icon-sound-off"
+            class="w-4 h-4 hidden text-slate-500"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="22" y1="9" x2="16" y2="15"></line>
+            <line x1="16" y1="9" x2="22" y2="15"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Viewport -->
+    <main class="relative z-10 flex-1 w-full max-w-5xl mx-auto px-5 sm:px-8 flex flex-col justify-center py-6 sm:py-10">
+      <!-- ==================== VIEW 1: ZERO-FRICTION TYPING STAGE ==================== -->
+      <section id="typing-view" class="w-full max-w-4xl mx-auto">
+        <!-- Minimalist Live HUD -->
+        <div class="flex items-end justify-between mb-5 sm:mb-7 min-h-[2.75rem]">
+          <div class="flex items-baseline gap-6 sm:gap-8">
+            <div>
+              <span
+                id="hud-timer"
+                class="font-mono text-3xl sm:text-4xl font-semibold text-amber-500 tabular-nums tracking-tight"
+              >
+                30
+              </span>
+              <span class="ml-1 text-xs font-mono text-slate-500">detik</span>
+            </div>
+
+            <div
+              id="hud-live-stats"
+              class="flex items-baseline gap-5 opacity-0 transition-opacity duration-200"
+            >
+              <div>
+                <span
+                  id="hud-wpm"
+                  class="font-mono text-2xl sm:text-3xl font-semibold text-slate-200 tabular-nums"
+                >
+                  0
+                </span>
+                <span class="ml-1 text-xs font-mono text-slate-500">wpm</span>
+              </div>
+              <div class="hidden sm:block">
+                <span
+                  id="hud-acc"
+                  class="font-mono text-lg font-medium text-slate-400 tabular-nums"
+                >
+                  100%
+                </span>
+                <span class="ml-1 text-xs font-mono text-slate-500">akurasi</span>
+              </div>
+              <div id="hud-streak-wrap" class="hidden sm:block opacity-0 transition-opacity duration-150">
+                <span
+                  id="hud-streak"
+                  class="font-mono text-sm font-medium text-amber-400 tabular-nums"
+                >
+                  0x
+                </span>
+                <span class="ml-1 text-xs font-mono text-slate-500">mulus</span>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-xs text-slate-500 hidden sm:block">
+            Edisi Satir Konoha · Langsung ketik untuk mulai
+          </p>
+        </div>
+
+        <!-- Typing Box (Tap anywhere to focus & summon virtual keyboard on mobile) -->
+        <div
+          id="typing-stage"
+          class="relative rounded-2xl bg-[#111827]/45 border border-white/[0.06] px-4 sm:px-7 py-6 sm:py-8 focus-within:border-white/[0.12]"
+        >
+          <input
+            id="typing-input"
+            type="text"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            inputmode="text"
+            aria-label="Ketik kata-kata yang muncul di layar"
+          />
+
+          <div id="words-viewport" class="words-viewport words-mask">
+            <div id="words-track">
+              <div id="caret" class="idle" aria-hidden="true"></div>
+            </div>
+          </div>
+
+          <!-- Subtle blur prompt only shown if user clicked outside mid-session or unfocused manually -->
+          <div
+            id="blur-hint"
+            class="hidden mt-3 text-center text-xs text-slate-400 pointer-events-none"
+          >
+            Ketuk area teks atau tekan tombol apa saja untuk melanjutkan
+          </div>
+        </div>
+
+        <!-- Minimal Restart Action -->
+        <div class="mt-6 sm:mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <button
+            id="restart-btn"
+            type="button"
+            class="group inline-flex items-center gap-2.5 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-400 hover:text-slate-100 rounded-lg hover:bg-white/[0.04] transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 whitespace-nowrap"
+          >
+            <svg
+              class="w-4 h-4 text-slate-400 group-hover:text-amber-400 transition-transform duration-200 group-hover:-rotate-45"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+            </svg>
+            <span>Restart</span>
+            <span class="font-mono text-[11px] text-slate-500 border border-white/[0.08] rounded px-1.5 py-0.5">
+              Tab / Esc
+            </span>
+          </button>
+
+          <p class="text-xs text-slate-500 sm:hidden">
+            Ketuk teks di atas untuk membuka keyboard
+          </p>
+        </div>
+      </section>
+
+      <!-- ==================== VIEW 2: RESULTS & LEADERBOARD ==================== -->
+      <section id="result-view" class="hidden w-full max-w-4xl mx-auto animate-enter">
+        <div class="rounded-2xl bg-[#111827] border border-white/[0.08] p-6 sm:p-8">
+          <!-- Result Header -->
+          <div class="flex flex-wrap items-baseline justify-between gap-2 pb-6 border-b border-white/[0.06]">
+            <div>
+              <h1 class="text-lg sm:text-xl font-semibold text-slate-50 tracking-tight">
+                Hasil Tes Mengetik
+              </h1>
+              <p id="result-meta" class="mt-1 text-xs sm:text-sm text-slate-400">
+                Mode 30 detik · Bahasa Indonesia
+              </p>
+            </div>
+            <button
+              id="play-again-btn"
+              type="button"
+              class="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-slate-200 hover:text-amber-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0"
+            >
+              <svg
+                class="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+              </svg>
+              <span>Coba Lagi (Tab)</span>
+            </button>
+          </div>
+
+          <!-- Primary Metrics Grid -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 py-7 border-b border-white/[0.06]">
+            <!-- Main Metric: WPM -->
+            <div>
+              <p class="text-xs font-medium text-slate-400">Kecepatan (WPM)</p>
+              <p
+                id="res-wpm"
+                class="mt-1.5 font-mono text-5xl sm:text-6xl font-bold text-amber-500 tabular-nums tracking-tight"
+              >
+                0
+              </p>
+            </div>
+
+            <!-- Accuracy -->
+            <div>
+              <p class="text-xs font-medium text-slate-400">Akurasi</p>
+              <p
+                id="res-acc"
+                class="mt-2 font-mono text-3xl sm:text-4xl font-semibold text-slate-100 tabular-nums"
+              >
+                0%
+              </p>
+            </div>
+
+            <!-- Characters Correct / Incorrect -->
+            <div>
+              <p class="text-xs font-medium text-slate-400">Karakter (Benar / Salah)</p>
+              <p class="mt-2 font-mono text-2xl sm:text-3xl font-semibold tabular-nums">
+                <span id="res-correct" class="text-slate-100">0</span>
+                <span class="text-slate-600 mx-1">/</span>
+                <span id="res-incorrect" class="text-rose-400">0</span>
+              </p>
+            </div>
+
+            <!-- Consistency -->
+            <div>
+              <p class="text-xs font-medium text-slate-400">Konsistensi</p>
+              <p
+                id="res-consistency"
+                class="mt-2 font-mono text-3xl sm:text-4xl font-semibold text-slate-100 tabular-nums"
+              >
+                0%
+              </p>
+            </div>
+          </div>
+
+          <!-- Save Score Form -->
+          <div id="save-score-container" class="pt-6">
+            <form id="save-score-form" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div class="flex-1">
+                <label for="nickname-input" class="sr-only">Masukkan Nama / Nickname</label>
+                <input
+                  id="nickname-input"
+                  type="text"
+                  maxlength="18"
+                  required
+                  placeholder="Masukkan Nama / Nickname..."
+                  class="w-full px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 bg-[#0B0F19] border border-white/[0.1] rounded-lg focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+                />
+              </div>
+              <button
+                id="save-score-btn"
+                type="submit"
+                class="px-5 py-2.5 text-sm font-semibold text-[#0B0F19] bg-amber-500 hover:bg-amber-400 active:bg-amber-600 rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Simpan ke Leaderboard
+              </button>
+            </form>
+            <p id="save-feedback" class="hidden mt-3 text-xs sm:text-sm text-emerald-400 font-medium"></p>
+          </div>
+        </div>
+
+        <!-- Inline Top 10 Global Leaderboard (Appears immediately after saving) -->
+        <div
+          id="inline-leaderboard-card"
+          class="hidden mt-6 rounded-2xl bg-[#111827] border border-white/[0.08] p-6 sm:p-8 animate-enter"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 id="inline-lb-title" class="text-base sm:text-lg font-semibold text-slate-50">
+                Top 10 Leaderboard · 30 Detik
+              </h2>
+              <p id="inline-lb-source" class="text-xs text-slate-400 mt-0.5"></p>
+            </div>
+
+            <div class="flex items-center gap-1 p-1 rounded-lg bg-[#0B0F19] border border-white/[0.08]">
+              <button
+                type="button"
+                data-lb-duration="15"
+                class="inline-lb-tab px-2.5 py-1 text-xs font-mono rounded-md transition-colors text-slate-400 hover:text-slate-100 whitespace-nowrap"
+              >
+                15s
+              </button>
+              <button
+                type="button"
+                data-lb-duration="30"
+                class="inline-lb-tab px-2.5 py-1 text-xs font-mono rounded-md transition-colors bg-amber-500 text-[#0B0F19] font-semibold whitespace-nowrap"
+              >
+                30s
+              </button>
+              <button
+                type="button"
+                data-lb-duration="60"
+                class="inline-lb-tab px-2.5 py-1 text-xs font-mono rounded-md transition-colors text-slate-400 hover:text-slate-100 whitespace-nowrap"
+              >
+                60s
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-white/[0.08] text-xs font-medium text-slate-400">
+                  <th class="py-2.5 pr-4 w-14">#</th>
+                  <th class="py-2.5 pr-4">Nama</th>
+                  <th class="py-2.5 pr-4 text-right">WPM</th>
+                  <th class="py-2.5 pr-4 text-right">Akurasi</th>
+                  <th class="py-2.5 text-right">Waktu</th>
+                </tr>
+              </thead>
+              <tbody id="inline-lb-body" class="divide-y divide-white/[0.05] text-sm"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Minimal Footer -->
+    <footer class="relative z-10 w-full max-w-5xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between text-xs text-slate-500">
+      <span>ketik. · Edisi Satir Indonesia</span>
+      <span class="hidden sm:inline font-mono text-slate-600">Tab / Esc untuk ulang cepat</span>
+    </footer>
+
+    <!-- ==================== LEADERBOARD MODAL (FROM HEADER BUTTON) ==================== -->
+    <div
+      id="leaderboard-modal"
+      class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#0B0F19]/80 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-lb-title"
+    >
+      <div class="w-full max-w-2xl rounded-2xl bg-[#111827] border border-white/[0.08] shadow-2xl overflow-hidden animate-modal">
+        <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-5 border-b border-white/[0.08]">
+          <div>
+            <h2 id="modal-lb-title" class="text-base sm:text-lg font-semibold text-slate-50">
+              Top 10 Leaderboard · 30 Detik
+            </h2>
+            <p id="modal-lb-source" class="text-xs text-slate-400 mt-0.5"></p>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1 p-1 rounded-lg bg-[#0B0F19] border border-white/[0.08]">
+              <button
+                type="button"
+                data-modal-duration="15"
+                class="modal-lb-tab px-2.5 py-1 text-xs font-mono rounded-md transition-colors text-slate-400 hover:text-slate-100 whitespace-nowrap"
+              >
+                15s
+              </button>
+              <button
+                type="button"
+                data-modal-duration="30"
+                class="modal-lb-tab px-2.5 py-1 text-xs font-mono rounded-md transition-colors bg-amber-500 text-[#0B0F19] font-semibold whitespace-nowrap"
+              >
+                30s
+              </button>
+              <button
+                type="button"
+                data-modal-duration="60"
+                class="modal-lb-tab px-2.5 py-1 text-xs font-mono rounded-md transition-colors text-slate-400 hover:text-slate-100 whitespace-nowrap"
+              >
+                60s
+              </button>
+            </div>
+
+            <button
+              id="close-leaderboard-btn"
+              type="button"
+              aria-label="Tutup leaderboard"
+              class="w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-100 hover:bg-white/[0.06] transition-colors"
+            >
+              <svg
+                class="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 max-h-[65vh] overflow-y-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-white/[0.08] text-xs font-medium text-slate-400">
+                <th class="py-2.5 pr-3 w-12">#</th>
+                <th class="py-2.5 pr-3">Nama</th>
+                <th class="py-2.5 pr-3 text-right">WPM</th>
+                <th class="py-2.5 pr-3 text-right">Akurasi</th>
+                <th class="py-2.5 text-right">Waktu</th>
+              </tr>
+            </thead>
+            <tbody id="modal-lb-body" class="divide-y divide-white/[0.05] text-sm"></tbody>
+          </table>
+        </div>
+
+        <div class="px-6 py-4 bg-white/[0.02] border-t border-white/[0.06] flex items-center justify-end">
+          <button
+            id="modal-back-typing-btn"
+            type="button"
+            class="px-4 py-2 text-xs sm:text-sm font-semibold text-[#0B0F19] bg-amber-500 hover:bg-amber-400 rounded-lg transition-colors"
+          >
+            Kembali Mengetik
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // =========================================================================
+      // KONFIGURASI FIREBASE FIRESTORE (OPSIONAL - UNTUK ONLINE MULTI-DEVICE)
+      // =========================================================================
+      // Isi objek firebaseConfig di bawah ini dengan kredensial project Firebase
+      // Anda (dari Firebase Console -> Project Settings -> General -> Your apps).
+      // Pastikan Firestore Database sudah aktif dengan collection "leaderboard".
+      //
+      // Jika firebaseConfig dibiarkan kosong seperti default di bawah ini,
+      // aplikasi akan OTOMATIS menggunakan localStorage beserta 5 skor contoh
+      // bawaan sehingga fitur simpan & Top 10 Leaderboard langsung siap pakai.
+      const firebaseConfig = {
+        apiKey: "",
+        authDomain: "",
+        projectId: "",
+        storageBucket: "",
+        messagingSenderId: "",
+        appId: "",
+      };
+
+      // =========================================================================
+      // TEKS KOCAK & SATIR ISU INDONESIA (MENYINDIR MEME & REALITA KONOHA)
+      // =========================================================================
+      const SATIRICAL_LINES = [
+        "ijazah gibran ditanya netizen malah disuruh tanya rumput yang bergoyang",
+        "katanya makan bergizi gratis tapi banyak siswa keracunan mbg di sekolah",
+        "menu mbg hari ini bikin perut langsung konser dangdut koplo sampai pagi",
+        "ijazah asli apa fotocopy legalisir kelurahan masih jadi misteri konoha",
+        "pagar laut muncul tiba tiba di pesisir tapi tidak ada satu pun yang ngaku",
+        "gas elpiji tiga kilo mendadak langka pas emak baru mau goreng tempe",
+        "parkiran indomaret kosong melompong pas keluar motor langsung bunyi priwit",
+        "gaji umr jakarta tapi gaya hidup wajib ngopi cantik di scbd tiap sore",
+        "server kementerian langsung down tepat saat deadline lapor pajak tahunan",
+        "lulus kuliah baru sadar jalur orang dalam lebih sakti dari ipk empat",
+        "lowongan kerja admin butuh pengalaman lima tahun maksimal umur dua lima",
+        "koruptor divonis ringan karena dinilai sopan dan ramah di ruang sidang",
+        "anggaran triliunan buat bikin aplikasi yang tampilannya mirip tugas kuliah",
+        "jalan berlubang ditanam pohon pisang biar estetik dan cepat viral",
+        "bansos lancar turun pas musim pemilu habis itu sinyal langsung hilang",
+        "subsidi tepat sasaran tapi mobil mewah ikut antri bensin di spbu",
+        "internet cepat buat apa kata bapak menteri pada zaman dahulu kala",
+        "kereta cepat berhenti mendadak kalau hujan deras mengguyur pinggir rel",
+        "pinjol cair dalam lima menit nagihnya ke kontak sampai tujuh turunan",
+        "bpjs kelas tiga antri sejak subuh dokternya masih ngopi di kantin",
+        "macet total dua jam di tol ternyata cuma ada pengendara lihat kecelakaan",
+        "warga konoha sudah kebal sama drama kebijakan yang direvisi tiap minggu",
+        "rapat wakil rakyat sampai larut malam bahas renovasi gorden rumah dinas",
+        "kualitas udara hari ini berasa sedang menghirup asap knalpot bajaj",
+        "harga beras naik terus tapi laporan resmi bilang inflasi tetap terkendali",
+        "polisi tidur di komplek lebih tinggi daripada harapan masa depan bangsa",
+        "netizen indonesia bergerak lebih cepat daripada satelit badan intelijen",
+        "katanya bonus demografi tapi loker minta tinggi badan dan good looking",
+        "uang pajak rakyat dipakai studi banding ke eropa sekalian beli oleh oleh",
+        "ojol muter nyari alamat ketemu pager tinggi sama anjing galak komplek",
+        "sinyal internet hilang di pedalaman tapi iklan judol tembus sampai mimpi",
+        "keracunan mbg massal tapi klarifikasinya cuma salah teknik penyimpanan",
+        "ijazah pejabat dicek pakai kaca pembesar oleh netizen di kolom komentar",
+        "bikin baliho senyum lebar padahal jalan kabupaten masih mirip kubangan kerbau",
+        "kuliah mahal mahal akhirnya tetap ditanya kapan nikah sama tetangga sebelah",
+        "pejabat minta maaf pakai baju putih sambil baca teks klarifikasi tiga halaman"
+      ];
+
+      // =========================================================================
+      // LEADERBOARD STORAGE TERPISAH PER DURASI (15s / 30s / 60s)
+      // =========================================================================
+      const LOCAL_STORAGE_KEY = "ketik_leaderboard_v2";
+      const MUTE_STORAGE_KEY = "ketik_sound_muted";
+
+      const SAMPLE_SCORES = [
+        // 15 Detik
+        { id: "s15-1", name: "FufufafaEnjoyer", wpm: 128, accuracy: 99, consistency: 93, duration: 15, createdAt: Date.now() - 1000 * 60 * 11 },
+        { id: "s15-2", name: "TukangPriwit", wpm: 116, accuracy: 97, consistency: 90, duration: 15, createdAt: Date.now() - 1000 * 60 * 34 },
+        { id: "s15-3", name: "AnakMagangSCBD", wpm: 104, accuracy: 96, consistency: 88, duration: 15, createdAt: Date.now() - 1000 * 60 * 80 },
+        { id: "s15-4", name: "MbgTester", wpm: 92, accuracy: 95, consistency: 85, duration: 15, createdAt: Date.now() - 1000 * 60 * 195 },
+        { id: "s15-5", name: "SinyalHilang", wpm: 81, accuracy: 92, consistency: 81, duration: 15, createdAt: Date.now() - 1000 * 60 * 410 },
+
+        // 30 Detik
+        { id: "s30-1", name: "Raka.id", wpm: 114, accuracy: 98, consistency: 91, duration: 30, createdAt: Date.now() - 1000 * 60 * 18 },
+        { id: "s30-2", name: "NadiaK", wpm: 102, accuracy: 97, consistency: 89, duration: 30, createdAt: Date.now() - 1000 * 60 * 52 },
+        { id: "s30-3", name: "TimMBGSehat", wpm: 95, accuracy: 96, consistency: 87, duration: 30, createdAt: Date.now() - 1000 * 60 * 120 },
+        { id: "s30-4", name: "WargaKonoha", wpm: 84, accuracy: 94, consistency: 84, duration: 30, createdAt: Date.now() - 1000 * 60 * 240 },
+        { id: "s30-5", name: "FajarDev", wpm: 76, accuracy: 93, consistency: 82, duration: 30, createdAt: Date.now() - 1000 * 60 * 480 },
+
+        // 60 Detik
+        { id: "s60-1", name: "BimaType", wpm: 98, accuracy: 98, consistency: 92, duration: 60, createdAt: Date.now() - 1000 * 60 * 25 },
+        { id: "s60-2", name: "BapakMulyono", wpm: 91, accuracy: 96, consistency: 90, duration: 60, createdAt: Date.now() - 1000 * 60 * 67 },
+        { id: "s60-3", name: "AdminKelurahan", wpm: 85, accuracy: 95, consistency: 88, duration: 60, createdAt: Date.now() - 1000 * 60 * 145 },
+        { id: "s60-4", name: "KorbanPinjol", wpm: 77, accuracy: 94, consistency: 85, duration: 60, createdAt: Date.now() - 1000 * 60 * 310 },
+        { id: "s60-5", name: "OjolTurbo", wpm: 69, accuracy: 91, consistency: 80, duration: 60, createdAt: Date.now() - 1000 * 60 * 560 },
+      ];
+
+      const isFirebaseConfigured = Boolean(
+        firebaseConfig &&
+          firebaseConfig.apiKey &&
+          firebaseConfig.projectId &&
+          firebaseConfig.appId
+      );
+
+      let firestoreApi = null;
+
+      async function getFirestoreClient() {
+        if (!isFirebaseConfigured) return null;
+        if (firestoreApi) return firestoreApi;
+
+        try {
+          const [appMod, fsMod] = await Promise.all([
+            import(/* @vite-ignore */ "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
+            import(/* @vite-ignore */ "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"),
+          ]);
+          const app = appMod.initializeApp(firebaseConfig);
+          const db = fsMod.getFirestore(app);
+          firestoreApi = {
+            db,
+            collection: fsMod.collection,
+            addDoc: fsMod.addDoc,
+            getDocs: fsMod.getDocs,
+            query: fsMod.query,
+            where: fsMod.where,
+            orderBy: fsMod.orderBy,
+            limit: fsMod.limit,
+          };
+          return firestoreApi;
+        } catch (err) {
+          console.warn("Gagal memuat Firebase SDK, beralih ke localStorage:", err);
+          return null;
+        }
+      }
+
+      function getLocalLeaderboard() {
+        try {
+          const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+          if (!raw) {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(SAMPLE_SCORES));
+            return [...SAMPLE_SCORES];
+          }
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed) || parsed.length === 0) {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(SAMPLE_SCORES));
+            return [...SAMPLE_SCORES];
+          }
+          return parsed;
+        } catch {
+          return [...SAMPLE_SCORES];
+        }
+      }
+
+      function sortAndTrimTop10ByDuration(entries, targetDuration) {
+        const dur = Number(targetDuration) || 30;
+        return [...entries]
+          .filter((item) => Number(item.duration) === dur)
+          .sort((a, b) => {
+            if (b.wpm !== a.wpm) return b.wpm - a.wpm;
+            if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+            return (b.createdAt || 0) - (a.createdAt || 0);
+          })
+          .slice(0, 10);
+      }
+
+      async function fetchLeaderboard(targetDuration = 30) {
+        const dur = Number(targetDuration) || 30;
+        const fs = await getFirestoreClient();
+        if (fs) {
+          try {
+            let snapshot;
+            try {
+              const q = fs.query(
+                fs.collection(fs.db, "leaderboard"),
+                fs.where("duration", "==", dur),
+                fs.orderBy("wpm", "desc"),
+                fs.limit(10)
+              );
+              snapshot = await fs.getDocs(q);
+            } catch {
+              // Fallback without composite index: fetch top 50 by wpm and filter client-side
+              const fallbackQ = fs.query(
+                fs.collection(fs.db, "leaderboard"),
+                fs.orderBy("wpm", "desc"),
+                fs.limit(50)
+              );
+              snapshot = await fs.getDocs(fallbackQ);
+            }
+            const entries = [];
+            snapshot.forEach((doc) => {
+              entries.push({ id: doc.id, ...doc.data() });
+            });
+            return {
+              entries: sortAndTrimTop10ByDuration(entries, dur),
+              source: "firebase",
+            };
+          } catch (err) {
+            console.warn("Gagal membaca Firestore, memakai fallback lokal:", err);
+          }
+        }
+        return {
+          entries: sortAndTrimTop10ByDuration(getLocalLeaderboard(), dur),
+          source: "local",
+        };
+      }
+
+      async function saveLeaderboardEntry(entry) {
+        const cleanEntry = {
+          name: entry.name.trim().slice(0, 18) || "Anonim",
+          wpm: Number(entry.wpm) || 0,
+          accuracy: Number(entry.accuracy) || 0,
+          consistency: Number(entry.consistency) || 0,
+          duration: Number(entry.duration) || 30,
+          createdAt: Date.now(),
+        };
+
+        const fs = await getFirestoreClient();
+        if (fs) {
+          try {
+            const docRef = await fs.addDoc(fs.collection(fs.db, "leaderboard"), cleanEntry);
+            return { saved: { id: docRef.id, ...cleanEntry }, source: "firebase" };
+          } catch (err) {
+            console.warn("Gagal menyimpan ke Firestore, memakai fallback lokal:", err);
+          }
+        }
+
+        const existing = getLocalLeaderboard();
+        const localSaved = { id: "user-" + Date.now(), ...cleanEntry };
+        existing.push(localSaved);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(existing));
+        return { saved: localSaved, source: "local" };
+      }
+
+      // =========================================================================
+      // WEB AUDIO API: SUBTLE MECHANICAL THOCK
+      // =========================================================================
+      let audioCtx = null;
+      let isMuted = false;
+      try {
+        isMuted = localStorage.getItem(MUTE_STORAGE_KEY) === "true";
+      } catch {
+        isMuted = false;
+      }
+
+      function ensureAudioContext() {
+        if (isMuted) return null;
+        if (!audioCtx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return null;
+          audioCtx = new AudioCtx();
+        }
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume().catch(() => {});
+        }
+        return audioCtx;
+      }
+
+      function playSound(kind = "key") {
+        if (isMuted) return;
+        const ctx = ensureAudioContext();
+        if (!ctx) return;
+
+        const now = ctx.currentTime;
+
+        if (kind === "finish") {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(523.25, now);
+          osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.14);
+          gain.gain.setValueAtTime(0.06, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.26);
+          return;
+        }
+
+        // Subtle mechanical thock body (warm low-end keystroke)
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        if (kind === "space") {
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(118 + Math.random() * 10, now);
+          osc.frequency.exponentialRampToValueAtTime(44, now + 0.042);
+          gain.gain.setValueAtTime(0.16, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+        } else if (kind === "backspace") {
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(185, now);
+          osc.frequency.exponentialRampToValueAtTime(85, now + 0.025);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.028);
+        } else if (kind === "error") {
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(92, now);
+          osc.frequency.exponentialRampToValueAtTime(62, now + 0.036);
+          gain.gain.setValueAtTime(0.11, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.038);
+        } else {
+          osc.type = "triangle";
+          const pitchJitter = (Math.random() - 0.5) * 18;
+          osc.frequency.setValueAtTime(155 + pitchJitter, now);
+          osc.frequency.exponentialRampToValueAtTime(54, now + 0.032);
+          gain.gain.setValueAtTime(0.13, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+        }
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.05);
+
+        // Crisp subtle switch housing transient
+        const bufferSize = Math.floor(ctx.sampleRate * 0.012);
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(kind === "error" ? 700 : 1350, now);
+        filter.Q.setValueAtTime(1.4, now);
+
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(kind === "backspace" ? 0.03 : 0.055, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.012);
+
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noise.start(now);
+      }
+
+      // =========================================================================
+      // ELEMEN DOM & STATE APLIKASI
+      // =========================================================================
+      const typingView = document.getElementById("typing-view");
+      const resultView = document.getElementById("result-view");
+      const typingStage = document.getElementById("typing-stage");
+      const typingInput = document.getElementById("typing-input");
+      const wordsTrack = document.getElementById("words-track");
+      const caretEl = document.getElementById("caret");
+      const blurHint = document.getElementById("blur-hint");
+
+      const hudTimer = document.getElementById("hud-timer");
+      const hudLiveStats = document.getElementById("hud-live-stats");
+      const hudWpm = document.getElementById("hud-wpm");
+      const hudAcc = document.getElementById("hud-acc");
+      const hudStreakWrap = document.getElementById("hud-streak-wrap");
+      const hudStreak = document.getElementById("hud-streak");
+
+      const resWpm = document.getElementById("res-wpm");
+      const resAcc = document.getElementById("res-acc");
+      const resCorrect = document.getElementById("res-correct");
+      const resIncorrect = document.getElementById("res-incorrect");
+      const resConsistency = document.getElementById("res-consistency");
+      const resultMeta = document.getElementById("result-meta");
+
+      const saveScoreForm = document.getElementById("save-score-form");
+      const nicknameInput = document.getElementById("nickname-input");
+      const saveScoreBtn = document.getElementById("save-score-btn");
+      const saveFeedback = document.getElementById("save-feedback");
+      const inlineLbCard = document.getElementById("inline-leaderboard-card");
+      const inlineLbTitle = document.getElementById("inline-lb-title");
+      const inlineLbBody = document.getElementById("inline-lb-body");
+      const inlineLbSource = document.getElementById("inline-lb-source");
+
+      const leaderboardModal = document.getElementById("leaderboard-modal");
+      const modalLbTitle = document.getElementById("modal-lb-title");
+      const modalLbBody = document.getElementById("modal-lb-body");
+      const modalLbSource = document.getElementById("modal-lb-source");
+
+      const soundToggleBtn = document.getElementById("sound-toggle-btn");
+      const iconSoundOn = document.getElementById("icon-sound-on");
+      const iconSoundOff = document.getElementById("icon-sound-off");
+
+      const state = {
+        duration: 30,
+        timeLeft: 30,
+        status: "idle", // 'idle' | 'running' | 'finished'
+        words: [],
+        typedWords: [],
+        wordIndex: 0,
+        startTime: 0,
+        timerInterval: null,
+        scrollOffsetLines: 0,
+        keystrokesCorrect: 0,
+        keystrokesTotal: 0,
+        wpmSamples: [],
+        streak: 0,
+        lastResult: null,
+        savedEntryId: null,
+        activeModalLbDuration: 30,
+        activeInlineLbDuration: 30,
+        lastLineIdx: -1,
+      };
+
+      let caretIdleTimer = null;
+
+      // =========================================================================
+      // WORD BANK & RENDERING (KALIMAT SATIR INDONESIA ACAK)
+      // =========================================================================
+      function shuffleArray(arr) {
+        const copy = [...arr];
+        for (let i = copy.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy;
+      }
+
+      function generateWords(minWordCount = 100) {
+        const result = [];
+        while (result.length < minWordCount) {
+          const shuffledIndices = shuffleArray(SATIRICAL_LINES.map((_, idx) => idx));
+          for (let i = 0; i < shuffledIndices.length; i++) {
+            const idx = shuffledIndices[i];
+            if (idx === state.lastLineIdx && shuffledIndices.length > 1) {
+              continue;
+            }
+            state.lastLineIdx = idx;
+            const wordsInLine = SATIRICAL_LINES[idx].split(" ");
+            result.push(...wordsInLine);
+            if (result.length >= minWordCount) break;
+          }
+        }
+        return result;
+      }
+
+      function createWordElement(word) {
+        const wordDiv = document.createElement("div");
+        wordDiv.className = "word";
+        for (let i = 0; i < word.length; i++) {
+          const span = document.createElement("span");
+          span.className = "letter";
+          span.textContent = word[i];
+          wordDiv.appendChild(span);
+        }
+        return wordDiv;
+      }
+
+      function appendWordsToTrack(newWords) {
+        const fragment = document.createDocumentFragment();
+        newWords.forEach((w) => {
+          fragment.appendChild(createWordElement(w));
+        });
+        wordsTrack.appendChild(fragment);
+      }
+
+      function renderInitialWords() {
+        wordsTrack.innerHTML = "";
+        wordsTrack.appendChild(caretEl);
+        state.words = generateWords(110);
+        state.typedWords = state.words.map(() => "");
+        appendWordsToTrack(state.words);
+        state.scrollOffsetLines = 0;
+        wordsTrack.style.transform = "translate3d(0, 0, 0)";
+        wordsTrack.classList.remove("animate-words-reset");
+        void wordsTrack.offsetWidth;
+        wordsTrack.classList.add("animate-words-reset");
+      }
+
+      function triggerLetterAnimation(el, animClass) {
+        if (!el) return;
+        el.classList.remove("pop-correct", "pop-error");
+        void el.offsetWidth;
+        el.classList.add(animClass);
+      }
+
+      function updateWordDOM(wIdx, animateLastChar = false) {
+        const wordEl = wordsTrack.children[wIdx + 1];
+        if (!wordEl) return;
+
+        const target = state.words[wIdx];
+        const typed = state.typedWords[wIdx] || "";
+
+        const extraEls = wordEl.querySelectorAll(".letter.extra");
+        extraEls.forEach((el) => el.remove());
+
+        const letterEls = wordEl.querySelectorAll(".letter");
+        for (let i = 0; i < target.length; i++) {
+          const el = letterEls[i];
+          el.classList.remove("correct", "incorrect");
+          if (i < typed.length) {
+            const isMatch = typed[i] === target[i];
+            el.classList.add(isMatch ? "correct" : "incorrect");
+            if (animateLastChar && i === typed.length - 1) {
+              triggerLetterAnimation(el, isMatch ? "pop-correct" : "pop-error");
+            }
+          }
+        }
+
+        if (typed.length > target.length) {
+          const extraStr = typed.slice(target.length, target.length + 8);
+          for (let j = 0; j < extraStr.length; j++) {
+            const extraSpan = document.createElement("span");
+            extraSpan.className = "letter extra";
+            extraSpan.textContent = extraStr[j];
+            if (animateLastChar && j === extraStr.length - 1) {
+              extraSpan.classList.add("pop-error");
+            }
+            wordEl.appendChild(extraSpan);
+          }
+        }
+
+        if (wIdx < state.wordIndex && typed !== target) {
+          wordEl.classList.add("word-error");
+        } else {
+          wordEl.classList.remove("word-error");
+        }
+      }
+
+      function getLineHeightPx() {
+        return window.innerWidth >= 768 ? 48 : 44;
+      }
+
+      function updateCaretAndScroll(animatePulse = true) {
+        const wordEl = wordsTrack.children[state.wordIndex + 1];
+        if (!wordEl) return;
+
+        const lineHeight = getLineHeightPx();
+        const caretHeight = caretEl.offsetHeight || (window.innerWidth >= 768 ? 32 : 28);
+        const typed = state.typedWords[state.wordIndex] || "";
+        const letterEls = wordEl.querySelectorAll(".letter");
+
+        let x = wordEl.offsetLeft;
+        let y = wordEl.offsetTop;
+
+        if (typed.length === 0) {
+          if (letterEls[0]) {
+            x = wordEl.offsetLeft + letterEls[0].offsetLeft;
+          }
+        } else if (typed.length < letterEls.length) {
+          const nextLetter = letterEls[typed.length];
+          x = wordEl.offsetLeft + nextLetter.offsetLeft;
+        } else {
+          const lastLetter = letterEls[letterEls.length - 1];
+          if (lastLetter) {
+            x = wordEl.offsetLeft + lastLetter.offsetLeft + lastLetter.offsetWidth;
+          }
+        }
+
+        const centeredY = y + (lineHeight - caretHeight) / 2;
+        caretEl.style.transform = `translate3d(${x}px, ${centeredY}px, 0)`;
+
+        // Smooth 3-line scrolling: keep active line at line 1 once passing line 1
+        const currentLine = Math.round(wordEl.offsetTop / lineHeight);
+        const targetOffsetLines = Math.max(0, currentLine - 1);
+        if (targetOffsetLines !== state.scrollOffsetLines) {
+          state.scrollOffsetLines = targetOffsetLines;
+          wordsTrack.style.transform = `translate3d(0, -${targetOffsetLines * lineHeight}px, 0)`;
+        }
+
+        if (animatePulse) {
+          caretEl.classList.remove("idle");
+          clearTimeout(caretIdleTimer);
+          caretIdleTimer = setTimeout(() => {
+            caretEl.classList.add("idle");
+          }, 450);
+        }
+      }
+
+      // =========================================================================
+      // METRICS CALCULATION (WPM, ACCURACY, CONSISTENCY)
+      // =========================================================================
+      function calculateStats(elapsedSeconds) {
+        let correctChars = 0;
+        let incorrectChars = 0;
+
+        for (let i = 0; i <= state.wordIndex && i < state.words.length; i++) {
+          const target = state.words[i];
+          const typed = state.typedWords[i] || "";
+
+          if (i < state.wordIndex) {
+            if (typed === target) {
+              correctChars += target.length + 1; // +1 for valid space
+            } else {
+              const minLen = Math.min(target.length, typed.length);
+              for (let j = 0; j < minLen; j++) {
+                if (typed[j] === target[j]) correctChars++;
+                else incorrectChars++;
+              }
+              incorrectChars += Math.abs(target.length - typed.length);
+              correctChars += 1; // space advance
+            }
+          } else {
+            // Current active word
+            const minLen = Math.min(target.length, typed.length);
+            for (let j = 0; j < minLen; j++) {
+              if (typed[j] === target[j]) correctChars++;
+              else incorrectChars++;
+            }
+            if (typed.length > target.length) {
+              incorrectChars += typed.length - target.length;
+            }
+          }
+        }
+
+        const minutes = Math.max(elapsedSeconds, 0.5) / 60;
+        const wpm = Math.max(0, Math.round(correctChars / 5 / minutes));
+
+        const accuracy =
+          state.keystrokesTotal > 0
+            ? Math.min(100, Math.max(0, Math.round((state.keystrokesCorrect / state.keystrokesTotal) * 100)))
+            : 100;
+
+        return { wpm, accuracy, correctChars, incorrectChars };
+      }
+
+      function calculateConsistency(samples) {
+        if (!samples || samples.length < 2) return 100;
+        const valid = samples.filter((v) => v > 0);
+        if (valid.length < 2) return 100;
+        const mean = valid.reduce((sum, v) => sum + v, 0) / valid.length;
+        if (mean === 0) return 0;
+        const variance = valid.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / valid.length;
+        const stdDev = Math.sqrt(variance);
+        const cv = stdDev / mean;
+        return Math.max(0, Math.min(100, Math.round(100 * (1 - cv * 0.85))));
+      }
+
+      // =========================================================================
+      // TEST LIFECYCLE (IDLE -> RUNNING -> FINISHED)
+      // =========================================================================
+      function animateCounter(el, target, suffix = "", durationMs = 460) {
+        const start = performance.now();
+        const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (prefersReduced || target === 0) {
+          el.textContent = String(target) + suffix;
+          return;
+        }
+        function tick(now) {
+          const progress = Math.min(1, (now - start) / durationMs);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          const current = Math.round(target * eased);
+          el.textContent = String(current) + suffix;
+          if (progress < 1) {
+            requestAnimationFrame(tick);
+          }
+        }
+        requestAnimationFrame(tick);
+      }
+
+      function updateStreakHUD() {
+        if (state.streak >= 3) {
+          hudStreak.textContent = state.streak + "x";
+          hudStreakWrap.classList.remove("opacity-0");
+        } else {
+          hudStreakWrap.classList.add("opacity-0");
+        }
+      }
+
+      function startTimer() {
+        if (state.status === "running") return;
+        state.status = "running";
+        state.startTime = performance.now();
+        hudLiveStats.classList.remove("opacity-0");
+        typingStage.classList.add("stage-active");
+
+        let lastSampleSecond = 0;
+
+        state.timerInterval = setInterval(() => {
+          const elapsed = (performance.now() - state.startTime) / 1000;
+          const remaining = Math.max(0, Math.ceil(state.duration - elapsed));
+          state.timeLeft = remaining;
+          hudTimer.textContent = String(remaining);
+
+          if (remaining <= 5 && remaining > 0) {
+            hudTimer.classList.add("timer-urgent");
+          } else {
+            hudTimer.classList.remove("timer-urgent");
+          }
+
+          const stats = calculateStats(elapsed);
+          hudWpm.textContent = String(stats.wpm);
+          hudAcc.textContent = stats.accuracy + "%";
+
+          const currentSecond = Math.floor(elapsed);
+          if (currentSecond > lastSampleSecond && currentSecond <= state.duration) {
+            lastSampleSecond = currentSecond;
+            state.wpmSamples.push(stats.wpm);
+          }
+
+          if (elapsed >= state.duration) {
+            finishTest();
+          }
+        }, 100);
+      }
+
+      function finishTest() {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+        state.status = "finished";
+        typingInput.blur();
+        typingStage.classList.remove("stage-active");
+        hudTimer.classList.remove("timer-urgent");
+        playSound("finish");
+
+        const stats = calculateStats(state.duration);
+        const consistency = calculateConsistency(state.wpmSamples);
+
+        state.lastResult = {
+          wpm: stats.wpm,
+          accuracy: stats.accuracy,
+          correctChars: stats.correctChars,
+          incorrectChars: stats.incorrectChars,
+          consistency,
+          duration: state.duration,
+        };
+        state.savedEntryId = null;
+
+        resultMeta.textContent = `Mode ${state.duration} detik · Edisi Satir Indonesia`;
+
+        // Reset save form
+        saveScoreForm.classList.remove("hidden");
+        saveScoreBtn.disabled = false;
+        saveScoreBtn.textContent = "Simpan ke Leaderboard";
+        saveFeedback.classList.add("hidden");
+        inlineLbCard.classList.add("hidden");
+
+        // Switch views
+        typingView.classList.add("hidden");
+        resultView.classList.remove("hidden");
+
+        // Smooth animated count-up for metrics
+        animateCounter(resWpm, stats.wpm, "", 520);
+        animateCounter(resAcc, stats.accuracy, "%", 440);
+        animateCounter(resCorrect, stats.correctChars, "", 420);
+        animateCounter(resIncorrect, stats.incorrectChars, "", 380);
+        animateCounter(resConsistency, consistency, "%", 460);
+
+        setTimeout(() => {
+          nicknameInput.focus();
+        }, 140);
+      }
+
+      function restartTest() {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+        state.status = "idle";
+        state.timeLeft = state.duration;
+        state.wordIndex = 0;
+        state.keystrokesCorrect = 0;
+        state.keystrokesTotal = 0;
+        state.wpmSamples = [];
+        state.streak = 0;
+        state.lastResult = null;
+        state.savedEntryId = null;
+
+        hudTimer.textContent = String(state.duration);
+        hudTimer.classList.remove("timer-urgent");
+        hudWpm.textContent = "0";
+        hudAcc.textContent = "100%";
+        hudLiveStats.classList.add("opacity-0");
+        hudStreakWrap.classList.add("opacity-0");
+        typingStage.classList.remove("stage-active");
+        blurHint.classList.add("hidden");
+
+        typingInput.value = "";
+        resultView.classList.add("hidden");
+        typingView.classList.remove("hidden");
+
+        renderInitialWords();
+        requestAnimationFrame(() => {
+          updateCaretAndScroll(false);
+          caretEl.classList.add("idle");
+          focusTypingInput();
+        });
+      }
+
+      function focusTypingInput() {
+        if (state.status === "finished" || !leaderboardModal.classList.contains("hidden")) {
+          return;
+        }
+        typingInput.focus({ preventScroll: true });
+        blurHint.classList.add("hidden");
+      }
+
+      // =========================================================================
+      // TYPING INPUT HANDLERS (DESKTOP & MOBILE VIRTUAL KEYBOARD)
+      // =========================================================================
+      typingInput.addEventListener("input", () => {
+        if (state.status === "finished") return;
+
+        let val = typingInput.value;
+        val = val.replace(/\u00A0/g, " ");
+
+        if (state.status === "idle" && val.length > 0) {
+          startTimer();
+        }
+
+        // Handle space pressed (supports fast typing & mobile IME commits)
+        if (val.includes(" ")) {
+          const parts = val.split(" ");
+          const remainder = parts.pop() || "";
+
+          for (let p = 0; p < parts.length; p++) {
+            const committed = parts[p];
+            if (committed.length === 0) continue;
+
+            state.typedWords[state.wordIndex] = committed;
+            const targetWord = state.words[state.wordIndex];
+            const finishedWordEl = wordsTrack.children[state.wordIndex + 1];
+
+            state.keystrokesTotal++;
+            if (committed === targetWord) {
+              state.keystrokesCorrect++;
+              state.streak++;
+              playSound("space");
+              if (finishedWordEl) {
+                finishedWordEl.classList.remove("word-success-pop");
+                void finishedWordEl.offsetWidth;
+                finishedWordEl.classList.add("word-success-pop");
+              }
+            } else {
+              state.streak = 0;
+              playSound("error");
+            }
+            updateStreakHUD();
+
+            const finishedWordIdx = state.wordIndex;
+            state.wordIndex++;
+            updateWordDOM(finishedWordIdx, false);
+
+            if (state.words.length - state.wordIndex < 35) {
+              const extra = generateWords(60);
+              state.words.push(...extra);
+              extra.forEach(() => state.typedWords.push(""));
+              appendWordsToTrack(extra);
+            }
+          }
+
+          typingInput.value = remainder;
+          if (remainder.length > 0) {
+            const targetWord = state.words[state.wordIndex];
+            let hasErr = false;
+            for (let i = 0; i < remainder.length; i++) {
+              state.keystrokesTotal++;
+              if (i < targetWord.length && remainder[i] === targetWord[i]) {
+                state.keystrokesCorrect++;
+              } else {
+                hasErr = true;
+              }
+            }
+            if (hasErr) playSound("error");
+          }
+          state.typedWords[state.wordIndex] = remainder;
+          updateWordDOM(state.wordIndex, remainder.length > 0);
+          updateCaretAndScroll(true);
+          return;
+        }
+
+        // Normal typing or backspace inside current word
+        const prevVal = state.typedWords[state.wordIndex] || "";
+        const targetWord = state.words[state.wordIndex];
+        let charAdded = false;
+
+        if (val.length > prevVal.length) {
+          charAdded = true;
+          const addedPart = val.slice(prevVal.length);
+          let hasError = false;
+          for (let i = 0; i < addedPart.length; i++) {
+            const charIdx = prevVal.length + i;
+            state.keystrokesTotal++;
+            if (charIdx < targetWord.length && addedPart[i] === targetWord[charIdx]) {
+              state.keystrokesCorrect++;
+            } else {
+              hasError = true;
+            }
+          }
+          playSound(hasError ? "error" : "key");
+        } else if (val.length < prevVal.length) {
+          playSound("backspace");
+        }
+
+        state.typedWords[state.wordIndex] = val;
+        updateWordDOM(state.wordIndex, charAdded);
+        updateCaretAndScroll(true);
+      });
+
+      typingInput.addEventListener("keydown", (e) => {
+        if (state.status === "finished") return;
+
+        // Allow backspace to return to previous word if current input is empty and previous word had error
+        if (e.key === "Backspace" && typingInput.value === "" && state.wordIndex > 0) {
+          const prevIdx = state.wordIndex - 1;
+          if (state.typedWords[prevIdx] !== state.words[prevIdx]) {
+            e.preventDefault();
+            state.wordIndex = prevIdx;
+            const restored = state.typedWords[prevIdx] || "";
+            typingInput.value = restored;
+            updateWordDOM(prevIdx);
+            updateCaretAndScroll(true);
+            playSound("backspace");
+          }
+        }
+
+        // Keep caret at end of hidden input
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Home" || e.key === "End") {
+          e.preventDefault();
+        }
+      });
+
+      typingInput.addEventListener("blur", () => {
+        if (
+          state.status === "running" &&
+          leaderboardModal.classList.contains("hidden")
+        ) {
+          blurHint.classList.remove("hidden");
+        }
+      });
+
+      typingInput.addEventListener("focus", () => {
+        blurHint.classList.add("hidden");
+      });
+
+      // Tap / click anywhere on typing stage summons keyboard & focuses input
+      typingStage.addEventListener("click", () => {
+        focusTypingInput();
+      });
+
+      // Global keyboard shortcuts & instant zero-friction typing capture
+      document.addEventListener("keydown", (e) => {
+        const modalOpen = !leaderboardModal.classList.contains("hidden");
+
+        if (e.key === "Escape") {
+          e.preventDefault();
+          if (modalOpen) {
+            closeLeaderboardModal();
+          } else {
+            restartTest();
+          }
+          return;
+        }
+
+        if (e.key === "Tab") {
+          if (!modalOpen) {
+            e.preventDefault();
+            restartTest();
+          }
+          return;
+        }
+
+        // Zero-friction auto-focus: if user starts typing anywhere while on typing view
+        if (
+          !modalOpen &&
+          state.status !== "finished" &&
+          document.activeElement !== typingInput &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.altKey
+        ) {
+          if (e.key.length === 1 || e.key === "Backspace") {
+            focusTypingInput();
+          }
+        }
+      });
+
+      // =========================================================================
+      // CONTROLS: DURATION, SOUND MUTE, RESTART, LEADERBOARD
+      // =========================================================================
+      const durationBtns = document.querySelectorAll(".duration-btn");
+      durationBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const nextDur = Number(btn.dataset.duration);
+          if (!nextDur || nextDur === state.duration) {
+            focusTypingInput();
+            return;
+          }
+          state.duration = nextDur;
+
+          durationBtns.forEach((b) => {
+            const active = Number(b.dataset.duration) === nextDur;
+            if (active) {
+              b.className =
+                "duration-btn px-3 py-1.5 text-xs font-mono font-semibold rounded-md transition-colors duration-150 bg-amber-500 text-[#0B0F19] whitespace-nowrap shrink-0";
+            } else {
+              b.className =
+                "duration-btn px-3 py-1.5 text-xs font-mono font-medium rounded-md transition-colors duration-150 text-slate-400 hover:text-slate-100 whitespace-nowrap shrink-0";
+            }
+          });
+
+          restartTest();
+        });
+      });
+
+      function updateSoundButtonUI() {
+        if (isMuted) {
+          iconSoundOn.classList.add("hidden");
+          iconSoundOff.classList.remove("hidden");
+          soundToggleBtn.title = "Suara ketikan: Mati";
+        } else {
+          iconSoundOn.classList.remove("hidden");
+          iconSoundOff.classList.add("hidden");
+          soundToggleBtn.title = "Suara ketikan: Aktif";
+        }
+      }
+
+      soundToggleBtn.addEventListener("click", () => {
+        isMuted = !isMuted;
+        try {
+          localStorage.setItem(MUTE_STORAGE_KEY, String(isMuted));
+        } catch {}
+        updateSoundButtonUI();
+        if (!isMuted) {
+          playSound("key");
+        }
+        if (state.status !== "finished" && leaderboardModal.classList.contains("hidden")) {
+          focusTypingInput();
+        }
+      });
+
+      document.getElementById("restart-btn").addEventListener("click", restartTest);
+      document.getElementById("play-again-btn").addEventListener("click", restartTest);
+      document.getElementById("brand-home-btn").addEventListener("click", () => {
+        closeLeaderboardModal();
+        restartTest();
+      });
+
+      // =========================================================================
+      // LEADERBOARD RENDERING & SUBMIT (TERPISAH PER DURASI 15s / 30s / 60s)
+      // =========================================================================
+      function formatRelativeTime(timestamp) {
+        if (!timestamp) return "-";
+        const diffSec = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+        if (diffSec < 60) return "Baru saja";
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return `${diffMin}m lalu`;
+        const diffHour = Math.floor(diffMin / 60);
+        if (diffHour < 24) return `${diffHour}j lalu`;
+        const diffDay = Math.floor(diffHour / 24);
+        return `${diffDay}h lalu`;
+      }
+
+      function escapeHtml(str) {
+        const div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      function renderLeaderboardRows(tbodyEl, entries, highlightId = null) {
+        if (!entries || entries.length === 0) {
+          tbodyEl.innerHTML = `
+            <tr>
+              <td colspan="5" class="py-8 text-center text-sm text-slate-500">
+                Belum ada skor di kategori durasi ini. Jadilah yang pertama!
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbodyEl.innerHTML = entries
+          .map((item, idx) => {
+            const rank = idx + 1;
+            const isHighlighted = highlightId && item.id === highlightId;
+            const rowClass = isHighlighted
+              ? "bg-amber-500/10 text-slate-50"
+              : "hover:bg-white/[0.02] text-slate-300";
+
+            const rankDisplay =
+              rank === 1
+                ? `<span class="font-mono font-bold text-amber-400">01</span>`
+                : rank <= 3
+                ? `<span class="font-mono font-semibold text-slate-200">0${rank}</span>`
+                : `<span class="font-mono text-slate-500">${String(rank).padStart(2, "0")}</span>`;
+
+            return `
+              <tr class="${rowClass} lb-row-enter transition-colors" style="animation-delay: ${idx * 35}ms">
+                <td class="py-3 pr-4 tabular-nums">${rankDisplay}</td>
+                <td class="py-3 pr-4 font-medium ${isHighlighted ? "text-amber-300" : "text-slate-100"}">
+                  ${escapeHtml(item.name || "Anonim")}
+                  ${isHighlighted ? '<span class="ml-2 text-xs text-amber-400 font-normal">(Skor Anda)</span>' : ""}
+                </td>
+                <td class="py-3 pr-4 text-right font-mono font-semibold text-amber-400 tabular-nums">
+                  ${Number(item.wpm) || 0}
+                </td>
+                <td class="py-3 pr-4 text-right font-mono text-slate-300 tabular-nums">
+                  ${Number(item.accuracy) || 0}%
+                </td>
+                <td class="py-3 text-right font-mono text-xs text-slate-400 tabular-nums whitespace-nowrap">
+                  ${formatRelativeTime(item.createdAt)}
+                </td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      function updateLbTabUI(selector, dataAttr, activeDuration) {
+        const tabs = document.querySelectorAll(selector);
+        tabs.forEach((tab) => {
+          const dur = Number(tab.dataset[dataAttr]);
+          if (dur === activeDuration) {
+            tab.className = `${selector.slice(1)} px-2.5 py-1 text-xs font-mono rounded-md transition-colors bg-amber-500 text-[#0B0F19] font-semibold whitespace-nowrap`;
+          } else {
+            tab.className = `${selector.slice(1)} px-2.5 py-1 text-xs font-mono rounded-md transition-colors text-slate-400 hover:text-slate-100 whitespace-nowrap`;
+          }
+        });
+      }
+
+      async function loadInlineLeaderboard(duration) {
+        const dur = Number(duration) || 30;
+        state.activeInlineLbDuration = dur;
+        inlineLbTitle.textContent = `Top 10 Leaderboard · ${dur} Detik`;
+        updateLbTabUI(".inline-lb-tab", "lbDuration", dur);
+
+        inlineLbBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-6 text-center text-xs text-slate-400">Memuat peringkat ${dur} detik...</td>
+          </tr>
+        `;
+
+        const { entries, source } = await fetchLeaderboard(dur);
+        inlineLbSource.textContent =
+          source === "firebase"
+            ? `Peringkat mode ${dur} detik · Online Firebase Firestore`
+            : `Peringkat mode ${dur} detik · Tersimpan lokal di perangkat`;
+        renderLeaderboardRows(inlineLbBody, entries, state.savedEntryId);
+      }
+
+      async function loadModalLeaderboard(duration) {
+        const dur = Number(duration) || 30;
+        state.activeModalLbDuration = dur;
+        modalLbTitle.textContent = `Top 10 Leaderboard · ${dur} Detik`;
+        updateLbTabUI(".modal-lb-tab", "modalDuration", dur);
+
+        modalLbBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-8 text-center text-xs text-slate-400">Memuat papan peringkat ${dur} detik...</td>
+          </tr>
+        `;
+        const { entries, source } = await fetchLeaderboard(dur);
+        modalLbSource.textContent =
+          source === "firebase"
+            ? `Peringkat khusus ${dur} detik · Online Firebase Firestore`
+            : `Peringkat khusus ${dur} detik · Data lokal perangkat`;
+        renderLeaderboardRows(modalLbBody, entries, state.savedEntryId);
+      }
+
+      document.querySelectorAll(".inline-lb-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const dur = Number(btn.dataset.lbDuration);
+          loadInlineLeaderboard(dur);
+        });
+      });
+
+      document.querySelectorAll(".modal-lb-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const dur = Number(btn.dataset.modalDuration);
+          loadModalLeaderboard(dur);
+        });
+      });
+
+      saveScoreForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!state.lastResult) return;
+
+        const nickname = nicknameInput.value.trim();
+        if (!nickname) {
+          nicknameInput.focus();
+          return;
+        }
+
+        saveScoreBtn.disabled = true;
+        saveScoreBtn.textContent = "Menyimpan...";
+
+        const { saved } = await saveLeaderboardEntry({
+          name: nickname,
+          wpm: state.lastResult.wpm,
+          accuracy: state.lastResult.accuracy,
+          consistency: state.lastResult.consistency,
+          duration: state.lastResult.duration,
+        });
+
+        state.savedEntryId = saved.id;
+        saveScoreForm.classList.add("hidden");
+        saveFeedback.textContent = `Skor ${saved.wpm} WPM (${saved.duration}s) atas nama "${saved.name}" berhasil disimpan.`;
+        saveFeedback.classList.remove("hidden");
+
+        inlineLbCard.classList.remove("hidden");
+        await loadInlineLeaderboard(saved.duration);
+      });
+
+      async function openLeaderboardModal() {
+        leaderboardModal.classList.remove("hidden");
+        await loadModalLeaderboard(state.duration);
+      }
+
+      function closeLeaderboardModal() {
+        leaderboardModal.classList.add("hidden");
+        if (state.status !== "finished") {
+          focusTypingInput();
+        }
+      }
+
+      document.getElementById("open-leaderboard-btn").addEventListener("click", openLeaderboardModal);
+      document.getElementById("close-leaderboard-btn").addEventListener("click", closeLeaderboardModal);
+      document.getElementById("modal-back-typing-btn").addEventListener("click", closeLeaderboardModal);
+      leaderboardModal.addEventListener("click", (e) => {
+        if (e.target === leaderboardModal) {
+          closeLeaderboardModal();
+        }
+      });
+
+      // Reposition caret smoothly when viewport resizes
+      window.addEventListener("resize", () => {
+        if (state.status !== "finished") {
+          updateCaretAndScroll(false);
+        }
+      });
+
+      // =========================================================================
+      // INISIALISASI LANGSUNG SIAP KETIK
+      // =========================================================================
+      updateSoundButtonUI();
+      renderInitialWords();
+      requestAnimationFrame(() => {
+        updateCaretAndScroll(false);
+        focusTypingInput();
+      });
+    </script>
+  </body>
+</html>
+
+

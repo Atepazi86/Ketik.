@@ -1,0 +1,6 @@
+{
+  "name": "ketik. — Tes Kecepatan Mengetik",
+  "description": "Aplikasi tes kecepatan mengetik modern, minimalis, dan zero-friction berbahasa Indonesia dengan audio mekanikal dan leaderboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
